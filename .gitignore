@@ -1,1 +1,2 @@
 /tests/libsqlite3.so.*
+/tests/libljblake3.so.*
