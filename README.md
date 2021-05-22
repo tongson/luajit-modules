@@ -12,6 +12,7 @@ Module                                                            | Version     
 [luassert](https://github.com/Olivine-Labs/luassert)[2]           | 36fc3af         | MIT
 [list](https://github.com/lalawue/ffi_list.lua)                   | 7f8ee88         | MIT
 [yaml](https://github.com/peposso/lua-tinyyaml)                   | d280b04         | MIT
+[ftcsv](https://github.com/FourierTransformer/ftcsv)              | 8668631 / 1.2.0 | MIT
 
 [1] Renamed to lpeg. `require"lpeg"` to require it.<br/>
 [2] Incomplete import. Some files, utility type code only.<br/>
