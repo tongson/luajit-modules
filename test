@@ -1,4 +1,4 @@
-#!../../bin/lua
+#!/srv/openresty/luajit/bin/luajit
 local T = require("u-test")
 T["base64 =>"] = dofile("tests/Tbase64.lua")
 T["json =>"] = dofile("tests/Tjson.lua")
