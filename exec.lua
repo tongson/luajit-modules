@@ -1,0 +1,375 @@
+local format = string.format
+local panic = function(str, ...)
+  local o = io.output()
+  io.output(io.stderr)
+  io.stdout:write(format(str, ...))
+  io.output(o)
+  io.stdout:flush()
+  os.exit(1)
+end
+local ffi = require "ffi"
+local ffiext = require "ffi_ext"
+local int = ffi.typeof'int[?]'
+local C = ffi.C
+local exec = {}
+ffi.cdef([[
+void _exit(int status);
+typedef int32_t pid_t;
+pid_t fork(void);
+pid_t waitpid(pid_t pid, int *status, int options);
+int open(const char *pathname, int flags, int mode);
+int close(int fd);
+int dup2(int oldfd, int newfd);
+int setenv(const char*, const char*, int);
+int execv(const char *file, char *const argv[]);
+int chdir(const char *);
+int pipe(int fd[2]);
+typedef long unsigned int size_t;
+typedef long signed int ssize_t;
+ssize_t read(int, void *, size_t);
+ssize_t write(int, const void *, size_t);
+int fcntl(int, int, ...);
+]])
+local STDIN = 0
+local STDOUT = 1
+local STDERR = 2
+local dup2 = ffiext.retry(C.dup2)
+local write = ffiext.retry(C.write)
+local execv = ffiext.retry(C.execv)
+local fcntl = ffiext.retry(C.fcntl)
+local fork = ffiext.retry(C.fork)
+local waitpid = ffiext.retry(C.waitpid)
+local read = ffiext.retry(C.read)
+local strerror = ffiext.strerror
+local open = ffiext.open
+local errno = ffi.errno
+-- dest should be either 0 or 1 (STDOUT or STDERR)
+local redirect = function(io_or_filename, dest_fd)
+  if io_or_filename == nil then return true end
+  -- first check for regular
+  if (io_or_filename == io.stdout or io_or_filename == STDOUT) and dest_fd ~= STDOUT then
+    local r, e = dup2(STDERR, STDOUT)
+    if r == -1 then return nil, strerror(e, "dup2(2) failed") end
+  elseif (io_or_filename == io.stderr or io_or_filename == STDERR) and dest_fd ~= STDERR then
+    local r, e = dup2(STDOUT, STDERR)
+    if r == -1 then return nil, strerror(e, "dup2(2) failed") end
+    -- otherwise handle file-based redirection
+  else
+    local fd, r, e
+    fd, e = open(io_or_filename)
+    if fd == -1 then return nil, strerror(e, "open(2) failed") end
+    r, e = dup2(fd, dest_fd)
+    if r == -1 then
+      C.close(fd)
+      return nil, strerror(e, "dup2(2) failed")
+    end
+    C.close(fd)
+  end
+  return true
+end
+
+exec.spawn = function (exe, args, env, cwd, stdin, stdout, stderr, ignore, errexit)
+  --[[
+    INPUT
+      exe: program or executable (string)
+      args: arguments to program (table)
+      env: environment variables when running program (table)
+      cwd: current working directory before running program (string)
+      stdin: STDIN input to program (string)
+      stdout: file to redirect STDOUT stream to (string)
+      stderr: file to redirect STDERR stream to (string)
+      ignore: when not nil or false, ignores the return value of the program (string)
+      errexit: panic when error is encountered (boolean)
+
+    OUTPUT
+      {
+        stdout: "STDOUT (string)",
+        stderr: "STDERR (string)",
+        code: "return code (number)",
+        error: "error (string)"
+      }
+  ]]
+  args = args or {}
+  local R = {
+    stdout = {},
+    stderr = {}
+  }
+  local ret
+  local p_stdin = ffi.new("int[2]")
+  local p_stdout = ffi.new("int[2]")
+  local p_stderr = ffi.new("int[2]")
+  local p_errno = ffi.new("int[2]")
+  if C.pipe(p_stdin) == -1 then
+     R.error = strerror(errno(), "pipe(2) for STDIN failed")
+     return nil, R
+  end
+  if C.pipe(p_stdout) == -1 then
+     R.error = strerror(errno(), "pipe(2) for STDOUT failed")
+     return nil, R
+  end
+  if C.pipe(p_stderr) == -1 then
+     R.error = strerror(errno(), "pipe(2) for STDERR failed")
+     return nil, R
+  end
+  if C.pipe(p_errno) == -1 then
+     R.error = strerror(errno(), "pipe(2) for errno pipe failed")
+     return nil, R
+  end
+
+  local F_GETFD = 1
+  local F_SETFD = 2
+  local FD_CLOEXEC = 1
+  local flags = fcntl(p_errno[1], F_GETFD)
+  flags = bit.bor(flags, FD_CLOEXEC)
+  if fcntl(p_errno[1], F_SETFD, ffi.cast('int', flags)) ~= 0 then
+    R.error = strerror(errno(), "fcntl(2) for errno pipe failed")
+    return nil, R
+  end
+
+  local pid = fork()
+  if pid < 0 then
+    R.error = strerror(errno(), "fork(2) failed")
+    return nil, R
+  elseif pid == 0 then -- child process
+    if stdin then
+      local r, e = dup2(p_stdin[0], STDIN)
+      if r == -1 then
+        local err = int(1, errno())
+        write(p_errno[1], err, ffi.sizeof(err))
+        C._exit(0)
+      end
+    end
+    if stdout then
+      local r, es = redirect(stdout, STDOUT)
+      if r == nil then
+        local err = int(1, errno())
+        write(p_errno[1], err, ffi.sizeof(err))
+        C._exit(0)
+      end
+    else
+      local r, e = dup2(p_stdout[1], STDOUT)
+      if r == -1 then
+        local err = int(1, errno())
+        write(p_errno[1], err, ffi.sizeof(err))
+        C._exit(0)
+      end
+    end
+    if stderr then
+      local r, es = redirect(stderr, STDERR)
+      if r == nil then
+        local err = int(1, errno())
+        write(p_errno[1], err, ffi.sizeof(err))
+        C._exit(0)
+      end
+    else
+      local r, e = dup2(p_stderr[1], STDERR)
+      if r == -1 then
+        local err = int(1, errno())
+        write(p_errno[1], err, ffi.sizeof(err))
+        C._exit(0)
+      end
+    end
+    local string_array_t = ffi.typeof('const char *[?]')
+    -- local char_p_k_p_t   = ffi.typeof('char *const*')
+    -- args is 1-based Lua table, argv is 0-based C array
+    -- automatically NULL terminated
+    local argv = string_array_t(#args + 1 + 1)
+    for i = 1, #args do
+      argv[i] = tostring(args[i])
+    end
+    do
+      local function setenv(name, value)
+        local overwrite_flag = 1
+        if C.setenv(name, value, overwrite_flag) == -1 then
+          local err = int(1, errno())
+          write(p_errno[1], err, ffi.sizeof(err))
+          C._exit(0)
+        end
+      end
+      for name, value in pairs(env or {}) do
+        setenv(name, tostring(value))
+      end
+    end
+    if cwd then
+      if C.chdir(tostring(cwd)) == -1 then
+        local err = int(1, errno())
+        write(p_errno[1], err, ffi.sizeof(err))
+        C._exit(0)
+      end
+    end
+    C.close(p_stdin[1])
+    C.close(p_stdout[0])
+    C.close(p_stderr[0])
+    C.close(p_errno[0])
+    C.close(p_stdin[0])
+    C.close(p_stdout[1])
+    C.close(p_stderr[1])
+
+    argv[0] = exe
+    argv[#args + 1] = nil
+    execv(exe, ffi.cast("char *const*", argv))
+    local err = int(1, errno())
+    write(p_errno[1], err, ffi.sizeof(err))
+    C._exit(0)
+  else
+    C.close(p_stdin[0])
+    C.close(p_stdout[1])
+    C.close(p_stderr[1])
+    if stdin then
+      local len = string.len(stdin)
+      local str = ffi.new("char[?]", len + 1)
+      ffi.copy(str, stdin, len)
+      local r, e = write(p_stdin[1], str, len)
+      if r == -1 then
+        R.error = strerror(e, "write(2) failed")
+        return nil, R
+      end
+      C.close(p_stdin[1])
+    else
+      C.close(p_stdin[1])
+    end
+
+    C.close(p_errno[1])
+    local err = int(1)
+    local n = read(p_errno[0], err, ffi.sizeof(err))
+    C.close(p_errno[0])
+    if n > 0 then
+      R.error = strerror(errno(), "exec failed")
+      return nil, R
+    end
+
+    do
+      local status = int(1)
+      local r, e = waitpid(pid, status, 0)
+      if r == -1 then
+        R.error = strerror(e, "waitpid(2) failed")
+        return nil, R
+      end
+      if bit.band(status[0], 0x7f) == 0 then
+        ret = bit.rshift(bit.band(status[0], 0xff00), 8)
+      else
+        R.error = "Killed."
+        return nil, R
+      end
+      R.code = ret
+    end
+    local output = function(i, o)
+      local F_GETFL = 0x03
+      local F_SETFL = 0x04
+      -- FD_CLOEXEC set earlier
+      local O_NONBLOCK = 0x800
+      local buf = ffi.new("char[?]", 1)
+      local oflags = C.fcntl(i, F_GETFL, 0)
+      oflags = bit.bor(oflags, O_NONBLOCK)
+      oflags = bit.bor(oflags, FD_CLOEXEC)
+      if fcntl(i, F_SETFL, ffi.new("int", oflags)) == -1 then
+        return nil, strerror(errno(), "fcntl(2) failed")
+      end
+      local on = 0
+      local c
+      local s = ''
+      -- Do not wrap C.read
+      while true do
+        on = C.read(i, buf, 1)
+        if on == -1 and (errno() == C.EAGAIN or errno() == C.EINTR) then
+          on = 0
+        elseif on == 1 then
+          c = ffi.string(buf, 1)
+          if c ~= "\n" then
+            s = format("%s%s", s, c)
+          else
+            o[#o+1] = s
+            s = ''
+          end
+        else
+          -- finalize
+          o[#o+1] = s
+          C.close(i)
+          break
+        end
+      end
+      return true
+    end
+    local sr, se
+    sr, se = output(p_stdout[0], R.stdout)
+    C.close(p_stdout[0])
+    if sr == nil then
+      R.error = se
+      return nil, R
+    end
+    sr, se = output(p_stderr[0], R.stderr)
+    C.close(p_stderr[0])
+    if sr == nil then
+      R.error = se
+      return nil, R
+    end
+  end
+  if ret == 0 or ignore then
+    return pid, R
+  elseif errexit then
+    return panic("<errexit> %s %s\n  -- ERROR --\n%s\n  -- STDERR --\n%s\n  -- STDOUT --\n%s\n", exe, table.concat(args, " "),
+        R.error or "",
+        table.concat(R.stderr, "\n"),
+        table.concat(R.stdout, "\n"))
+  else
+    return nil, R
+  end
+end
+exec.cmd = function(exe)
+  local set = {}
+  return setmetatable(set, {
+    __index = function(_, a)
+      return function(_, ...)
+        local args = { a }
+        local aa = table.pack(...)
+        for i=1,aa.n do
+          args[#args+1] = aa[i]
+        end
+        return exec.spawn(exe,
+                         args,
+           rawget(set, "env"),
+           rawget(set, "cwd"),
+         rawget(set, "stdin"),
+        rawget(set, "stdout"),
+        rawget(set, "stderr"),
+        rawget(set, "ignore"),
+       rawget(set, "errexit"))
+      end
+    end
+  })
+end
+exec.context = function(exe)
+  local set = {}
+  return setmetatable(set, {__call = function(_, ...)
+    local args = {}
+    local n = select("#", ...)
+    if n == 1 then
+      for k in string.gmatch(..., "%S+") do
+        args[#args+1] = k
+      end
+    elseif n > 1 then
+      for _, k in ipairs({...}) do
+        args[#args+1] = k
+      end
+    end
+    return exec.spawn(exe, args, set.env, set.cwd, set.stdin, set.stdout, set.stderr, set.ignore, set.errexit)
+  end})
+end
+exec.ctx = exec.context
+exec.exec = setmetatable({},
+  {__index =
+    function (_, exe)
+      return function(...)
+        local args
+        if not (...) then
+          args = {}
+        elseif type(...) == "table" then
+          args = ...
+        else
+          args = {...}
+        end
+        return exec.spawn(exe, args, args.env, args.cwd, args.stdin, args.stdout, args.stderr, args.ignore, args.errexit)
+      end
+    end
+  })
+return exec
