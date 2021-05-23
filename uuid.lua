@@ -152,6 +152,5 @@ function M.seed()
 end
 
 return setmetatable( M, { __call = function(self)
-  self.seed()
   return self.new()
 end})
