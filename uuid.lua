@@ -78,19 +78,6 @@ local function INT2HEX(x)
   return s
 end
 
-----------------------------------------------------------------------------
--- Creates a new uuid. Either provide a unique hex string, or make sure the
--- random seed is properly set. The module table itself is a shortcut to this
--- function, so `my_uuid = uuid.new()` equals `my_uuid = uuid()`.
---
--- First call `uuid.seed()`, then request a uuid using no
--- parameter, eg. `my_uuid = uuid()`
---
--- @return a properly formatted uuid string
--- @usage
--- local uuid = require("uuid")
--- uuid.seed()
--- print("here's a new uuid: ",uuid())
 function M.new()
   -- bytes are treated as 8bit unsigned bytes.
   local bytes = {
@@ -138,9 +125,6 @@ end
 ----------------------------------------------------------------------------
 -- Seeds the random generator.
 -- Adapted from https://gist.github.com/arekk/592260eb52cd71aaa5a2
---
--- uuid.seed()
--- print("here's a new uuid: ",uuid())
 function M.seed()
   local r = ffi_ext.getrandom(4)
   local a = string.byte(r)
