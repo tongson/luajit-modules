@@ -51,27 +51,27 @@ end
 
 local rect = Rectangle:new(2, 4, 6, 8)
 local extend = function()
-	T.expected(6)(rect.w)
+	T.expect(6)(rect.w)
 end
 local is = function()
-	T.expected(true)(rect:is(Rectangle))
-	T.expected(true)(rect:is("Rectangle"))
+	T.expect(true)(rect:is(Rectangle))
+	T.expect(true)(rect:is("Rectangle"))
 end
 local is_not = function()
-	T.expected(false)(rect:is(Point))
+	T.expect(false)(rect:is(Point))
 end
 local has = function()
-	T.expected(1)(rect:has("Point"))
+	T.expect(1)(rect:has("Point"))
 end
 local has_object = function()
-	T.expected(2)(Rectangle:has(Object))
+	T.expect(2)(Rectangle:has(Object))
 end
 local called = function()
-	T.expected("called")(rect())
+	T.expect("called")(rect())
 end
 local extend2 = function()
-	T.expected(666)(rect.w)
-	T.expected(8)(rect.height)
+	T.expect(666)(rect.w)
+	T.expect(8)(rect.height)
 end
 
 if included then

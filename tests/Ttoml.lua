@@ -10,7 +10,7 @@ local string_1 = function()
 	T.is_table(t)
 	T.is_table(t.list)
 	T.is_table(t.list.songs)
-	T.expected("Dead")(t.list.songs[1]["name"])
+	T.expect("Dead")(t.list.songs[1]["name"])
 end
 local string_2 = function()
 	local s = [[
@@ -18,7 +18,7 @@ local string_2 = function()
 	]]
 	local t = toml.parse(s)
 	T.is_table(t)
-	T.expected(1)(t.test)
+	T.expect(1)(t.test)
 end
 if included then
 	return function()
