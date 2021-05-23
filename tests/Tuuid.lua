@@ -16,6 +16,18 @@ local format_of_the_generated_uuid = function()
 		T.equal("-", u:sub(24, 24))
 		T.equal(36, #u)
 	end
+	local str = uuid()
+	local match = string.match
+	local d = '[0-9a-fA-F]'
+	local p = '^' .. table.concat({
+		d:rep(8),
+		d:rep(4),
+		d:rep(4),
+		'[89ab]' .. d:rep(3),
+		d:rep(12)
+	}, '%-') .. '$'
+	T.equal(#str, 36)
+	T.is_not_nil(match(str, p))
 end
 
 local randomseed_properly_limits_the_value = function()
@@ -27,14 +39,12 @@ if included then
 	return function()
 		T["generating a uuid"] = generating_a_uuid
 		T["format of the generated uuid"] = format_of_the_generated_uuid
-		T["hwaddr parameter"] = hwaddr_parameter
 		T["uuid.randomseed() properly limits the value"] =
 			randomseed_properly_limits_the_value
 	end
 else
 	T["generating a uuid"] = generating_a_uuid
 	T["format of the generated uuid"] = format_of_the_generated_uuid
-	T["hwaddr parameter"] = hwaddr_parameter
 	T["uuid.randomseed() properly limits the value"] =
 		randomseed_properly_limits_the_value
 	local t = {}
