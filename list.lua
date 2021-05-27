@@ -1,305 +1,186 @@
 --
--- Copyright (c) 2020 lalawue
+-- Copyright (c) 2021 lalawue
 --
 -- This library is free software; you can redistribute it and/or modify it
 -- under the terms of the MIT license. See LICENSE for details.
 --
 
---[[
-   ffi_list will keep only one value instance,
-   for node <-> value mapping,
-   limited size but at least 1e30 slot, change this in _nextKey()
-]]
-local ffi = require("ffi")
-
-ffi.cdef [[
-struct _cnode {
-    struct _cnode *prev;
-    struct _cnode *next;
-    double key;
-};
-struct _chead {
-    struct _cnode *head;
-    struct _cnode *tail;
-};
-void* calloc(size_t count, size_t size);
-void free(void *ptr);
-]]
-
-local C = ffi.C
-
 local _M = {}
 _M.__index = _M
 
-local function _nextKey(self)
-    local key = self._key + 1e-32 -- ignore significant digit
-    while self._nvmap[key] do
-        key = key + math.random()
+-- dummy value
+local dummy = {}
+
+-- list count
+function _M:count()
+    return self._count
+end
+
+-- first element in list
+function _M:first()
+    return self._first
+end
+
+-- last element in list
+function _M:last()
+    return self._last
+end
+
+-- contains
+function _M:contains(value)
+    if value == nil then
+        return false
     end
-    self._key = key
-    return key
+    return self._value[value] ~= nil
 end
 
-local function _calloc(str)
-    return ffi.cast(str .. "*", C.calloc(1, ffi.sizeof(str)))
-end
-
-local function _add_maps(self, node, value)
-    self._vnmap[value] = node
-    self._nvmap[node.key] = value
+-- push to first
+function _M:pushf(value)
+    if self:contains(value) then
+        return false
+    end
+    self._next[value] = self._first
+    if self._first == nil then
+        self._first = value
+        self._last = value
+    else
+        self._prev[self._first] = value
+        self._first = value
+    end
+    self._value[value] = dummy
     self._count = self._count + 1
-    return value
+    return true
 end
 
-local function _remove_node(self, node)
-    if node == nil then
+-- push to last
+function _M:pushl(value)
+    if self:contains(value) then
+        return false
+    end
+    self._prev[value] = self._last
+    if self._last == nil then
+        self._first = value
+        self._last = value
+    else
+        self._next[self._last] = value
+        self._last = value
+    end
+    self._value[value] = dummy
+    self._count = self._count + 1
+    return true
+end
+
+-- remove element in list
+function _M:remove(value)
+    if not self:contains(value) then
         return nil
     end
-    local value = self._nvmap[node.key]
-    if self._root.head == node then
-        self._root.head = node.next
+    local next = self._next[value]
+    local prev = self._prev[value]
+    if next ~= nil then
+        self._prev[next] = prev
     end
-    if self._root.tail == node then
-        self._root.tail = node.prev
+    if prev ~= nil then
+        self._next[prev] = next
     end
-    if node.prev ~= nil then
-        node.prev.next = node.next
+    self._next[value] = nil
+    self._prev[value] = nil
+    self._value[value] = nil
+    if value == self._first then
+        self._first = next
     end
-    if node.next ~= nil then
-        node.next.prev = node.prev
+    if value == self._last then
+        self._last = prev
     end
-    self._nvmap[node.key] = nil
-    self._vnmap[value] = nil
-    C.free(node)
     self._count = self._count - 1
     return value
 end
 
--- public interface
---
-
-function _M:first()
-    if self._count <= 0 then
-        return nil
-    end
-    return self._nvmap[self._root.head.key]
-end
-
-function _M:last()
-    if self._count <= 0 then
-        return nil
-    end
-    return self._nvmap[self._root.tail.key]
-end
-
-function _M:pushf(value)
-    if value == nil then
-        return nil
-    end
-    _remove_node(self, self._vnmap[value])
-    local node = _calloc("struct _cnode")
-    node.key = _nextKey(self)
-    node.next = self._root.head
-    if self._root.head ~= nil then
-        self._root.head.prev = node
-    else
-        self._root.tail = node
-    end
-    self._root.head = node
-    return _add_maps(self, node, value)
-end
-
--- push last
-function _M:pushl(value)
-    if value == nil then
-        return nil
-    end
-    _remove_node(self, self._vnmap[value])
-    local node = _calloc("struct _cnode")
-    node.key = _nextKey(self)
-    node.prev = self._root.tail
-    if self._root.tail ~= nil then
-        self._root.tail.next = node
-    else
-        self._root.head = node
-    end
-    self._root.tail = node
-    return _add_maps(self, node, value)
-end
-
--- insert front
-function _M:insertf(value, beforeValue)
-    if value == nil or beforeValue == nil then
-        return
-    end
-    local vnode = self._vnmap[value]
-    if vnode ~= nil then
-        _remove_node(self, vnode)
-    end
-    local bnode = self._vnmap[beforeValue]
-    if bnode == nil then
-        return
-    end
-    vnode = _calloc("struct _cnode")
-    vnode.key = _nextKey(self)
-    vnode.prev = bnode.prev
-    vnode.next = bnode
-    if bnode.prev ~= nil then
-        bnode.prev.next = vnode
-    end
-    bnode.prev = vnode
-    return _add_maps(self, vnode, value)
-end
-
--- insert after
-function _M:insertl(value, afterValue)
-    if value == nil or afterValue == nil then
-        return
-    end
-    local vnode = self._vnmap[value]
-    if vnode ~= nil then
-        _remove_node(self, vnode)
-    end
-    local anode = self._vnmap[afterValue]
-    if anode == nil then
-        return
-    end
-    vnode = _calloc("struct _cnode")
-    vnode.key = _nextKey(self)
-    vnode.prev = anode
-    vnode.next = anode.next
-    if anode.next ~= nil then
-        anode.next.prev = vnode
-    end
-    anode.next = vnode
-    return _add_maps(self, vnode, value)
-end
-
+-- pop first element
 function _M:popf()
-    if self._count <= 0 then
-        return nil
-    end
-    return _remove_node(self, self._root.head)
+    return self:remove(self._first)
 end
 
--- popp last
+-- pop last element
 function _M:popl()
-    if self._count <= 0 then
-        return nil
-    end
-    return _remove_node(self, self._root.tail)
+    return self:remove(self._last)
 end
 
-function _M:remove(value)
-    if value == nil then
-        return nil
-    end
-    return _remove_node(self, self._vnmap[value])
-end
-
-function _M:next(value)
-    if value == nil then
-        return nil
-    end
-    local node = self._vnmap[value]
-    if node == nil or node.next == nil then
-        return nil
-    end
-    return self._nvmap[node.next.key]
-end
-
-function _M:prev(value)
-    if value == nil then
-        return nil
-    end
-    local node = self._vnmap[value]
-    if node == nil or node.prev == nil then
-        return nil
-    end
-    return self._nvmap[node.prev.key]
-end
-
+-- with range index
 function _M:range(from, to)
     from = from or 1
     to = to or self._count
-    if self._count <= 0 or from < 1 or from > self._count or from > to then
+    if self._count <= 0 or math.min(from,to) < 1 or math.max(from,to) > self._count then
         return {}
     end
-    to = math.min(self._count, to)
     local range = {}
-    local idx = 1
-    local node = self._root.head
+    local step = (from < to) and 1 or -1    
+    local idx = (step > 0) and 1 or self._count
+    local value = (step > 0) and self._first or self._last
+    if from > to then
+        from, to = to, from
+    end
     repeat
-        local nn = node.next
         if idx >= from and idx <= to then
-            range[#range + 1] = self._nvmap[node.key]
+            range[#range + 1] = value
         end
-        node = nn
-        idx = idx + 1
-    until (node == nil) or (idx > to)
+        idx = idx + step        
+        if step > 0 then
+            value = self._next[value]
+            if idx > to then
+                break
+            end
+        else            
+            value = self._prev[value]
+            if idx < from then
+                break
+            end
+        end
+    until value == nil
     return range
 end
 
-function _M:walk()
+-- with element iterator
+function _M:walk(seq)
     if self._count <= 0 then
         return function()
             return nil
         end
     end
-    local idx = 1
-    local node = self._root.head
+    if seq == nil then
+        seq = true
+    end
+    local idx = seq and 1 or self._count
+    local step = seq and 1 or -1
+    local value = seq and self._first or self._last
     return function()
-        if node ~= nil then
+        if value ~= nil then
             local i = idx
-            local n = node
-            idx = idx + 1
-            node = node.next
-            return i, self._nvmap[n.key]
+            local v = value
+            idx = idx + step
+            if seq then
+                value = self._next[value]
+            else                
+                value = self._prev[value]
+            end
+            return i, v
         else
             return nil
         end
     end
 end
 
-function _M:clear()
-    if self._count <= 0 then
-        return
-    end
-    for _, n in pairs(self._vnmap) do
-        C.free(n)
-    end
-    self._root.head = nil
-    self._root.tail = nil
-    self._vnmap = {} -- value to node
-    self._nvmap = {} -- node to value
-    self._count = 0
-    self._key = 0 -- for key generation
-end
-
-function _M:count()
-    return self._count
-end
-
--- constructor
+-- create instance
 local function _new()
-    local ins = setmetatable({}, _M)
-    ins._root = _calloc("struct _chead")
-    ins._root.head = nil
-    ins._root.tail = nil
-    ins._vnmap = {} -- value to node
-    ins._nvmap = {} -- node to value
-    ins._count = 0
-    ins._key = 0 -- for key generation
-    ffi.gc(
-        ins._root,
-        function(root)
-            for _, n in pairs(ins._vnmap) do
-                C.free(n)
-            end
-            C.free(root)
-        end
-    )
-    return ins
+    local ins = {
+        _count = 0,
+        _first = nil,
+        _last = nil,
+        _value = {},
+        _prev = {},
+        _next = {},
+    }
+    return setmetatable(ins, _M)
 end
 
 return {
