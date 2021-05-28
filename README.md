@@ -11,7 +11,7 @@ Module                                                            | Version     
 [list](https://github.com/lalawue/list.lua)                       | 9be6c7c         | MIT
 [yaml](https://github.com/peposso/lua-tinyyaml)                   | d280b04         | MIT
 [ftcsv](https://github.com/FourierTransformer/ftcsv)              | 8668631 / 1.2.0 | MIT
-[object](https://github.com/lua-rocks/object/)                    | 2662f90         | Unlicense
+[object](https://github.com/lua-rocks/object/)                    | 4ba1bc0         | Unlicense
 [toml](https://github.com/pocomane/lua-toml)                      | 9038631         | MIT
 
 [1] Renamed to lpeg. `require"lpeg"` to require it.<br/>
