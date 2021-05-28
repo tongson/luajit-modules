@@ -1,79 +1,292 @@
 local included = pcall(debug.getlocal, 5, 1)
-local lst = require("list").new()
+local list = require("list")
 local T = require("u-test")
-
-lst:pushl("b") -- push last 'b'
-lst:pushf("a") -- push first 'a'
-
-for i = 1, 4, 1 do
-	lst:pushl(tostring(i)) -- push last '1, 2, 3, 4'
+local expect = T.expect
+local func = T.is_function
+local tbl = T.is_table
+local trve = T.is_true
+local nope = T.is_false
+--# = list
+--# :toc:
+--# :toc-placement!:
+--#
+--# Doubly linked list data structures. Stores one instance of a value. Push tables for more leeway.
+--#
+--# toc::[]
+--#
+--# == *list.new*() -> _Table_
+--# Create a new list.
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |table |List
+--# |===
+--#
+local new = function()
+	func(list.new)
+	local l = list.new()
+	tbl(l)
 end
-
-lst:pushl({ 5, 6, 7 }) -- push table
-lst:pushl(8) -- push number
-lst:pushl(true) -- push boolean
-
-lst:remove("3") -- remove '3', in middle
-lst:popf() -- pop first 'a'
-
-lst:pushl("end") -- push 'end'
-lst:popl() -- pop 'end'
-
+--#
+--# == *:pushf*(_Value_)
+--# Push to beginning of list.
+--#
+--# === Arguments
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |value |String, Boolean, Number, or Table
+--# |===
+local pushf_string = function()
+	local l = list.new()
+	func(l.pushf)
+	l:pushf("1")
+	l:pushf("2")
+	local x = l:popl()
+	expect("1")(x)
+end
+local pushf_number = function()
+	local l = list.new()
+	l:pushf(1)
+	l:pushf(2)
+	local x = l:popl()
+	expect(1)(x)
+end
+local pushf_boolean = function()
+	local l = list.new()
+	l:pushf(false)
+	l:pushf(true)
+	local x = l:popl()
+	expect(false)(x)
+end
+local pushf_table = function()
+	local l = list.new()
+	local one = {
+		one = 1,
+	}
+	local two = {
+		two = 2,
+	}
+	l:pushf(one)
+	l:pushf(two)
+	local x = l:popl()
+	tbl(x)
+	expect(1)(x.one)
+end
+--#
+--# == *:pushl*(_Value_)
+--# Push to end of list.
+--#
+--# === Arguments
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |value |String, Boolean, Number, or Table
+--# |===
+local pushl_string = function()
+	local l = list.new()
+	func(l.pushl)
+	l:pushl("1")
+	l:pushl("2")
+	local x = l:popl()
+	expect("2")(x)
+end
+local pushl_number = function()
+	local l = list.new()
+	l:pushl(1)
+	l:pushl(2)
+	local x = l:popl()
+	expect(2)(x)
+end
+local pushl_boolean = function()
+	local l = list.new()
+	l:pushl(false)
+	l:pushl(true)
+	local x = l:popl()
+	expect(true)(x)
+end
+local pushl_table = function()
+	local l = list.new()
+	local one = {
+		one = 1,
+	}
+	local two = {
+		two = 2,
+	}
+	l:pushl(one)
+	l:pushl(two)
+	local x = l:popl()
+	tbl(x)
+	expect(2)(x.two)
+end
+--#
+--# == *:popf*() -> _Value_
+--# Pop value from beginning of list.
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |value |String, Boolean, Number, or Table
+--# |===
+local popf = function()
+	local l = list.new()
+	func(l.popf)
+	l:pushl("1")
+	l:pushl("2")
+	local x = l:popf()
+	expect("1")(x)
+end
+--#
+--# == *:popl*() -> _Value_
+--# Pop value from end of list.
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |value |String, Boolean, Number, or Table
+--# |===
+local popl = function()
+	local l = list.new()
+	func(l.popl)
+	l:pushl("1")
+	l:pushl("2")
+	local x = l:popl()
+	expect("2")(x)
+end
+--#
+--# == *:contains*() -> _Boolean_
+--# Check if list contains an instance of number, string, or boolean
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |boolean |`true` if value is found, `false` otherwise
+--# |===
+local contains = function()
+	local l = list.new()
+	func(l.contains)
+	l:pushl("1")
+	l:pushl(2)
+	l:pushl(false)
+	trve(l:contains("1"))
+	trve(l:contains(2))
+	trve(l:contains(false))
+	nope(l:contains())
+	nope(l:contains(5))
+end
+--#
+--# == *:walk*([_Boolean_]) -> _Iterator_
+--# Iterate over list.
+--#
+--# === Arguments
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |boolean |if `false`, does a reverse iteration
+--# |===
 local walk = function()
-	for k, v in lst:walk() do
-		if k == 1 then
-			T.equal(v, "b")
+	local l = list.new()
+	func(l.walk)
+	l:pushl("1")
+	l:pushl(2)
+	l:pushl(false)
+	for x, y in l:walk() do
+		if x == 1 then
+			expect("1")(y)
 		end
-		if k == 2 then
-			T.equal(v, "1")
+		if x == 2 then
+			expect(2)(y)
 		end
-		if k == 3 then
-			T.equal(v, "2")
-		end
-		if k == 4 then
-			T.equal(v, "4")
-		end
-		if k == 5 then
-			T.is_table(v)
-		end
-		if k == 6 then
-			T.is_number(v)
-		end
-		if k == 7 then
-			T.is_true(v)
+		if x == 3 then
+			nope(y)
 		end
 	end
+	local n = 4
+	for x, y in l:walk(false) do
+		n = n - 1
+		expect(n)(x)
+	end
 end
+--#
+--# == *:range*(_Number_, _Number_) -> _Table_
+--# Return a table for ranged iteration.
+--#
+--# === Arguments
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |number |Index start
+--# |number |Index end
+--# |===
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |table |Table with values
+--# |===
 local range = function()
-	for i, v in ipairs(lst:range(2, 3)) do
-		if i == 1 then
-			T.equal(v, "1")
+	local l = list.new()
+	func(l.range)
+	l:pushl("1")
+	l:pushl(2)
+	l:pushl(false)
+	l:pushl({})
+	for x, y in ipairs(l:range(2, 3)) do
+		if x == 1 then
+			expect(2)(y)
 		end
-		if i == 2 then
-			T.equal(v, "2")
+		if x == 2 then
+			nope(y)
+		end
+	end
+	for x, y in ipairs(l:range(4,3)) do
+		if x == 1 then
+			tbl(y)
+		end
+		if x == 2 then
+			nope(y)
 		end
 	end
 end
-local pop = function()
-	T.is_true(lst:popl())
-	T.is_number(lst:popl())
-	T.is_table(lst:popl())
-	T.equal(lst:popl(), "4")
-	T.equal(lst:popl(), "2")
-	T.equal(lst:popl(), "1")
-	T.equal(lst:popl(), "b")
-end
-
 if included then
 	return function()
+		T["new"] = new
+		T["pushf_string"] = pushf_string
+		T["pushf_number"] = pushf_number
+		T["pushf_boolean"] = pushf_boolean
+		T["pushf_number"] = pushf_number
+		T["pushl_string"] = pushl_string
+		T["pushl_number"] = pushl_number
+		T["pushl_boolean"] = pushl_boolean
+		T["pushl_number"] = pushl_number
+		T["popf"] = popf
+		T["popl"] = popl
+		T["contains"] = contains
 		T["walk"] = walk
 		T["range"] = range
-		T["pop"] = pop
 	end
 else
+	T["new"] = new
+	T["pushf_string"] = pushf_string
+	T["pushf_number"] = pushf_number
+	T["pushf_boolean"] = pushf_boolean
+	T["pushf_number"] = pushf_number
+	T["pushl_string"] = pushl_string
+	T["pushl_number"] = pushl_number
+	T["pushl_boolean"] = pushl_boolean
+	T["pushl_number"] = pushl_number
+	T["popf"] = popf
+	T["popl"] = popl
+	T["contains"] = contains
 	T["walk"] = walk
 	T["range"] = range
-	T["pop"] = pop
+	local lst = list.new()
 	local round = 0
 	local push_mean = 0
 	local pop_mean = 0
