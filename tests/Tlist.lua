@@ -180,6 +180,63 @@ local contains = function()
 	nope(l:contains(5))
 end
 --#
+--# == *:count*() -> _Number_
+--# Count items in list.
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |number |Count
+--# |===
+local count = function()
+	local l = list.new()
+	func(l.count)
+	l:pushl("1")
+	l:pushl(2)
+	l:pushl(false)
+	expect(3)(l:count())
+	l:popl()
+	expect(2)(l:count())
+end
+--#
+--# == *:first*() -> _Value_
+--# Return first value in the list. Does not pop() the value.
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |value |Value
+--# |===
+local first= function()
+	local l = list.new()
+	func(l.count)
+	l:pushl("1")
+	l:pushl(2)
+	l:pushl(false)
+	expect("1")(l:first())
+	expect(3)(l:count())
+end
+--#
+--# == *:last*() -> _Value_
+--# Return last value in the list. Does not pop() the value.
+--#
+--# === Returns
+--# [options="header",width="72%"]
+--# |===
+--# |Type |Description
+--# |value |Value
+--# |===
+local last = function()
+	local l = list.new()
+	func(l.count)
+	l:pushl("1")
+	l:pushl(2)
+	expect(2)(l:last())
+	expect(2)(l:count())
+end
+--#
 --# == *:walk*([_Boolean_]) -> _Iterator_
 --# Iterate over list.
 --#
@@ -253,6 +310,13 @@ local range = function()
 			nope(y)
 		end
 	end
+	do
+		local s = list.new()
+		s:pushl("a")
+		s:pushl("b")
+		s:pushl("c")
+		expect("abc")(table.concat(s:range(1, s:count()), ""))
+	end
 end
 if included then
 	return function()
@@ -268,6 +332,9 @@ if included then
 		T["popf"] = popf
 		T["popl"] = popl
 		T["contains"] = contains
+		T["count"] = count
+		T["first"] = first
+		T["last"] = last
 		T["walk"] = walk
 		T["range"] = range
 	end
@@ -284,6 +351,9 @@ else
 	T["popf"] = popf
 	T["popl"] = popl
 	T["contains"] = contains
+	T["count"] = count
+	T["first"] = first
+	T["last"] = last
 	T["walk"] = walk
 	T["range"] = range
 	local lst = list.new()
