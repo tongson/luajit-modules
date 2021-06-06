@@ -13,6 +13,7 @@ Module                                                            | Version     
 [ftcsv](https://github.com/FourierTransformer/ftcsv)              | 8668631 / 1.2.0 | MIT
 [object](https://github.com/lua-rocks/object/)                    | 4ba1bc0         | Unlicense
 [toml](https://github.com/pocomane/lua-toml)                      | 9038631         | MIT
+[guard](https://github.com/Yonaba/guard.lua)                      | cc38583         | MIT
 
 [1] Renamed to lpeg. `require"lpeg"` to require it.<br/>
 [2] Incomplete import. Some files, utility type code only.<br/>
