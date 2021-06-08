@@ -14,6 +14,7 @@ Module                                                            | Version     
 [object](https://github.com/lua-rocks/object/)                    | 4ba1bc0         | Unlicense
 [toml](https://github.com/pocomane/lua-toml)                      | 9038631         | MIT
 [guard](https://github.com/Yonaba/guard.lua)                      | cc38583         | MIT
+[bimap](https://github.com/catwell/cw-lua)                        | HEAD            | MIT
 
 [1] Renamed to lpeg. `require"lpeg"` to require it.<br/>
 [2] Incomplete import. Some files, utility type code only.<br/>
