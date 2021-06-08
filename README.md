@@ -16,6 +16,7 @@ Module                                                            | Version     
 [guard](https://github.com/Yonaba/guard.lua)                      | cc38583         | MIT
 [bimap](https://github.com/catwell/cw-lua)                        | HEAD            | MIT
 [deque](https://github.com/catwell/cw-lua)                        | HEAD            | MIT
+[tumple](https://github.com/Yonaba/tuple.lua)                     | HEAD            | MIT
 
 [1] Renamed to lpeg. `require"lpeg"` to require it.<br/>
 [2] Incomplete import. Some files, utility type code only.<br/>
