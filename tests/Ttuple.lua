@@ -6,11 +6,15 @@ local func = T.is_function
 local tbl = T.is_table
 local bool = T.is_boolean
 local num = T.is_number
+local error_raised = T.error_raised
+local not_eq = T.not_equal
 --# = tuple
 --# :toc:
 --# :toc-placement!:
 --#
 --# Implementation of ordered n-tuples.
+--#
+--# Tuples are fixed sized and may contain `nil`. Values can be changed for existing keys. Tables passed are copied.
 --#
 --# toc::[]
 --#
@@ -34,9 +38,11 @@ local types = function()
 	num(n[1])
 	local z = tuple()
 	expect(nil)(z[1])
+	local x = tuple(1, nil, 2)
+	expect(3)(x:size())
 end
 local table_test = function()
-	local o = {1}
+	local o = { 1 }
 	local t = tuple(o)
 	local x = t[1]
 	expect(1)(x[1])
@@ -45,14 +51,38 @@ local table_test = function()
 	expect(0)(y[1])
 	expect(1)(o[1]) -- immutable because table was cloned.
 end
+local metatable = function()
+	local list = require("list")
+	local l = list.new()
+	local one = {
+		one = 1,
+	}
+	local two = {
+		two = 2,
+	}
+	l:push(one)
+	l:push(two)
+	local tup = tuple(l)
+	local t = tup[1]
+	local x = t:pop()
+	tbl(x)
+	expect(2)(x.two)
+	local a = tostring(l)
+	local b = tostring(t)
+	not_eq(a, b)
+end
 local printing = function()
-	local tup = tuple('a', true, 1)
+	local tup = tuple("a", true, 1)
 	expect("(a, true, 1)")(tostring(tup))
 end
+local printing_nil = function()
+	local nup = tuple(1, nil, 2)
+	expect("(1, nil, 2)")(tostring(nup))
+end
 local slicing = function()
-	local f = {1}
-	local tup = tuple('a', 'b', 'c', 'd', 'e', f)
-	local new_tup = tup(2,4)
+	local f = { 1 }
+	local tup = tuple("a", "b", "c", "d", "e", f)
+	local new_tup = tup(2, 4)
 	expect("b")(new_tup[1])
 	expect("c")(new_tup[2])
 	expect("d")(new_tup[3])
@@ -64,19 +94,32 @@ local slicing = function()
 	expect(0)(t[1])
 	expect(1)(f[1])
 end
+local slicing_nil = function()
+	local nup = tuple(2, nil, 3)
+	local nnup = nup(2)
+	expect(nil)(nnup[1])
+	expect(3)(nnup[2])
+	local xup = tuple(2, nil, 3)
+	local xxup = xup(1, 2)
+	expect(2)(xxup[1])
+	expect(nil)(xxup[2])
+end
 --#
---# == *:elements()*
---# Iterator function to traverse a tuple. Returns a count and a value at each step of iteration, until nil value is encountered or the end of the tuple was reached.
-local elements = function()
-	local tup = tuple(1, 2, {}, "z")
+--# == *:iterator()*
+--# Iterator function to traverse a tuple. Returns a count and a value at each step of iteration, until the end of the tuple is reached.
+--#
+--# Use this instead of `ipairs` since the tuple may contain `nil`.
+local iterator = function()
+	local tup = tuple(1, nil, 2, {}, "z")
 	local t = {}
-	for i, element in tup:elements() do
-		t[#t+1] = element
+	for i, element in tup:iterator() do
+		t[i] = element
 	end
 	expect(1)(t[1])
-	expect(2)(t[2])
-	tbl(t[3])
-	expect("z")(t[4])
+	expect(nil)(t[2])
+	expect(2)(t[3])
+	tbl(t[4])
+	expect("z")(t[5])
 end
 --#
 --# == *:includes(_Table_)* -> _Boolean_
@@ -96,11 +139,15 @@ end
 --# |boolean |Result
 --# |===
 local includes = function()
-	local tup = tuple('a', 'b', 'c')
-	expect(true)(tup:includes(tuple('a')))
-	expect(true)(tup:includes(tuple('a', 'b')))
-	expect(true)(tup:includes(tuple('a', 'b', 'c')))
-	expect(false)(tup:includes(tuple('d')))
+	local tup = tuple("a", "b", "c")
+	expect(true)(tup:includes(tuple("a")))
+	expect(true)(tup:includes(tuple("a", "b")))
+	expect(true)(tup:includes(tuple("a", "b", "c")))
+	expect(false)(tup:includes(tuple("d")))
+end
+local includes_nil = function()
+	local tup = tuple(1, nil, 3)
+	expect(true)(tup:includes(tuple(nil)))
 end
 --#
 --# == *:has(_Table_)* -> _Boolean_
@@ -120,9 +167,13 @@ end
 --# |boolean |Result
 --# |===
 local has = function()
-	local tup = tuple(0, false, '3')
+	local tup = tuple(0, false, "3")
 	expect(false)(tup:has(true))
-	expect(true)(tup:has('3'))
+	expect(true)(tup:has("3"))
+end
+local has_nil = function()
+	local tup = tuple(0, nil, 1)
+	expect(true)(tup:has(nil))
 end
 --#
 --# == *:size(_Table_)* -> _Number_
@@ -135,13 +186,18 @@ end
 --# |number |Size of tuple
 --# |===
 local size = function()
-	local tup = tuple(0, false, '3')
+	local tup = tuple(0, false, "3")
 	expect(3)(tup:size())
 	expect(3)(#tup)
 end
 --#
 --# == *:contents(_Table_)* -> _Table_
---# Converts the tuple contents to a simple array.
+--# Converts the tuple contents to a read-only array.
+--#
+--# [NOTE]
+--# ====
+--# Lower level tables can be modified.
+--# ====
 --#
 --# === Arguments
 --# [options="header",width="72%"]
@@ -158,7 +214,7 @@ end
 --# |===
 local array = function()
 	local o = { 1 }
-	local tup = tuple(0, false, '3', o)
+	local tup = tuple(0, false, "3", o)
 	local arr = tup:contents()
 	expect(0)(arr[1])
 	expect(false)(arr[2])
@@ -166,25 +222,37 @@ local array = function()
 	expect(1)(arr[4][1])
 	arr[4][1] = 0
 	expect(0)(arr[4][1])
+	expect(1)(tup[4][1])
 	expect(1)(o[1])
+	-- Test read-only effect
+	local fn = function()
+		arr[4] = nil
+	end
+	error_raised(fn)
+end
+local array_nil = function()
+	local tup = tuple(0, nil, 1)
+	local arr = tup:contents()
+	expect(0)(arr[1])
+	expect(nil)(arr[2])
+	expect(1)(arr[3])
 end
 local addition = function()
-	local tupA = tuple(1, 2, false)
-	local tupB = tuple(4, 5, true)
-	local nt = tupA + tupB
-	expect(1)(nt[1])
-	expect(2)(nt[2])
-	expect(false)(nt[3])
-	expect(4)(nt[4])
-	expect(5)(nt[5])
-	expect(true)(nt[6])
-	local xt = tupB + tupA
-	expect(4)(xt[1])
-	expect(5)(xt[2])
-	expect(true)(xt[3])
-	expect(1)(xt[4])
-	expect(2)(xt[5])
-	expect(false)(xt[6])
+	local x = tuple(1) + tuple(2)
+	expect(1)(x[1])
+	expect(2)(x[2])
+	local y = tuple(3, 4) + tuple("a", false)
+	expect(3)(y[1])
+	expect(4)(y[2])
+	expect("a")(y[3])
+	expect(false)(y[4])
+end
+local addition_nil = function()
+	local x = tuple(1, nil) + tuple(nil, 2)
+	expect(1)(x[1])
+	expect(nil)(x[2])
+	expect(nil)(x[3])
+	expect(2)(x[4])
 end
 local comparison = function()
 	local tupA = tuple(1, true)
@@ -193,21 +261,47 @@ local comparison = function()
 	local tupC = tuple(1, false)
 	expect(false)(tupA == tupC)
 	expect(true)(tupA ~= tupC)
-	expect(true)(not(tupA == tupC))
+	expect(true)(not (tupA == tupC))
 	local tupD = tuple(1, 2, 3)
 	local tupE = tuple(1, 2)
 	expect(true)(tupA == tupB)
 end
+local comparison_nil = function()
+	local tupA = tuple(1, nil)
+	local tupB = tuple(1, nil)
+	expect(true)(tupA == tupB)
+	local tupC = tuple(1)
+	local tupD = tuple(1, nil)
+	expect(false)(tupC == tupD)
+end
 local multiplication = function()
-	local tupA = tuple(1, 2)
-	local new_tup = tupA * 3
-	local other_tup = 3 * tupA
-	expect("(1, 2, 1, 2, 1, 2)")(tostring(new_tup))
-	expect("(1, 2, 1, 2, 1, 2)")(tostring(other_tup))
+	local t1 = tuple("a", "z") * 2
+	expect("a")(t1[1])
+	expect("z")(t1[2])
+	expect("a")(t1[3])
+	expect("z")(t1[4])
+	local t2 = tuple(1) * 3
+	expect(1)(t2[1])
+	expect(1)(t2[2])
+	expect(1)(t2[3])
+	local t3 = 2 * tuple(2)
+	expect(2)(t3[1])
+	expect(2)(t3[2])
+	local t4 = tuple() * 0
+	expect(nil)(t4)
+end
+local multiplication_nil = function()
+	local t = tuple("a", nil, 2) * 2
+	expect("a")(t[1])
+	expect(nil)(t[2])
+	expect(2)(t[3])
+	expect("a")(t[4])
+	expect(nil)(t[5])
+	expect(2)(t[6])
 end
 local less_than = function()
-	local tupA = tuple(1,2)
-	local tupB = tuple(2,3)
+	local tupA = tuple(1, 2)
+	local tupB = tuple(2, 3)
 	expect(true)(tupA < tupB)
 	expect(false)(tupB < tupA)
 	expect(true)(tupB > tupA)
@@ -215,34 +309,100 @@ local less_than = function()
 end
 local lte = function()
 	do
-		local tupA = tuple(1,2)
-		local tupB = tuple(1,3)
+		local tupA = tuple(1, 2)
+		local tupB = tuple(1, 3)
 		expect(true)(tupA <= tupB)
 		expect(false)(tupB <= tupA)
 	end
 	do
-		local tupA = tuple(1,2,3)
-		local tupB = tuple(2,2)
+		local tupA = tuple(1, 2, 3)
+		local tupB = tuple(2, 2)
 		expect(true)(tupA <= tupB)
 		expect(false)(tupB <= tupA)
 	end
 end
+local mutate = function()
+	local tup = tuple(1, 2)
+	tup[1] = 2
+	expect(2)(tup[1])
+	expect(2)(tup[2])
+end
+local iterate = function()
+	local tup = tuple(1, 2)
+	local t = {}
+	for x, y in ipairs(tup) do
+		t[x] = y
+	end
+	expect(1)(t[1])
+	expect(2)(t[2])
+	local p = {}
+	for x, y in pairs(tup) do
+		p[x] = y
+	end
+	expect(1)(p[1])
+	expect(2)(p[2])
+end
+local newindex = function()
+	local tup = tuple(1, 2)
+	local fn = function()
+		tup[3] = 3
+	end
+	error_raised(fn)
+end
 if included then
 	return function()
+		T["Valid types"] = types
+		T["Tables passed"] = table_test
+		T["metatable"] = metatable
+		T["__tostring"] = printing
+		T["__tostring nil"] = printing_nil
+		T["Slicing"] = slicing
+		T["Slicing with nil"] = slicing_nil
+		T[":iterator()"] = iterator
+		T[":includes()"] = includes
+		T[":includes nil"] = includes_nil
+		T[":has()"] = has
+		T[":has(nil)"] = has_nil
+		T[":size()"] = size
+		T[":contents()"] = array
+		T[":contents with nil"] = array_nil
+		T["Addition"] = addition
+		T["Addition with nil"] = addition_nil
+		T["Comparison"] = comparison
+		T["Comparison with nil"] = comparison_nil
+		T["Multiplication"] = multiplication
+		T["Multiplication with nils"] = multiplication_nil
+		T["<"] = less_than
+		T["<="] = lte
+		T["mutate"] = mutate
+		T["iterate"] = iterate
+		T["newindex"] = newindex
 	end
 else
 	T["Valid types"] = types
 	T["Tables passed"] = table_test
+	T["metatable"] = metatable
 	T["__tostring"] = printing
+	T["__tostring nil"] = printing_nil
 	T["Slicing"] = slicing
-	T[":elements()"] = elements
+	T["Slicing with nil"] = slicing_nil
+	T[":iterator()"] = iterator
 	T[":includes()"] = includes
+	T[":includes nil"] = includes_nil
 	T[":has()"] = has
+	T[":has(nil)"] = has_nil
 	T[":size()"] = size
 	T[":contents()"] = array
+	T[":contents with nil"] = array_nil
 	T["Addition"] = addition
+	T["Addition with nil"] = addition_nil
 	T["Comparison"] = comparison
+	T["Comparison with nil"] = comparison_nil
 	T["Multiplication"] = multiplication
+	T["Multiplication with nils"] = multiplication_nil
 	T["<"] = less_than
 	T["<="] = lte
+	T["mutate"] = mutate
+	T["iterate"] = iterate
+	T["newindex"] = newindex
 end
