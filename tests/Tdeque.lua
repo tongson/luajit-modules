@@ -77,6 +77,8 @@ end
 --# == *:push_back*(_Value_)
 --# Push to end of queue.
 --#
+--# Alias: `:push`
+--#
 --# === Arguments
 --# [options="header",width="72%"]
 --# |===
@@ -88,7 +90,7 @@ local push_back = function()
 	func(q.push_back)
 	q:push_back(true)
 	q:push_back(false)
-	q:push_back(true)
+	q:push(true)
 	q:push_back(false)
 	expect(4)(q:size())
 	local t = q:contents()
@@ -129,6 +131,8 @@ end
 --# == *:pop_back*() -> _Value_
 --# Pop value from end of queue.
 --#
+--# Alias: `:pop`
+--#
 --# === Returns
 --# [options="header",width="72%"]
 --# |===
@@ -144,7 +148,7 @@ local pop_back = function()
 	q:push_back(4)
 	expect(4)(q:size())
 	expect(4)(q:pop_back())
-	expect(3)(q:pop_back())
+	expect(3)(q:pop())
 	expect(2)(q:pop_back())
 	expect(1)(q:pop_back())
 	expect(0)(q:size())
